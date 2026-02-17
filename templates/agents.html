@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}סוכנים{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-robot"></i> סוכנים</h1>
+        <p>מצב כל הסוכנים במערכת</p>
+    </div>
+</div>
+
+<div class="agent-grid" id="agentGrid">
+    <div class="empty-state"><p>טוען...</p></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadAgents() {
+    try {
+        const response = await fetch('/api/agents/status');
+        const data = await response.json();
+        if (!data.success) return;
+
+        const grid = document.getElementById('agentGrid');
+        grid.innerHTML = data.agents.map(a => `
+            <div class="agent-card">
+                <h4>
+                    <span class="agent-status-dot ${a.healthy ? 'healthy' : 'unhealthy'}"></span>
+                    ${escapeHtml(a.name)}
+                </h4>
+                <p style="font-size:.8rem; color:var(--text-secondary); margin-bottom:.5rem;">${escapeHtml(a.description)}</p>
+                <div style="font-size:.78rem; color:var(--text-secondary);">
+                    <span>סוג: <strong>${escapeHtml(a.type)}</strong></span>
+                    ${a.details ? `<br>${Object.entries(a.details).map(([k,v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`).join(' | ')}` : ''}
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadAgents);
+setInterval(loadAgents, 60000);
+</script>
+{% endblock %}

@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}לידים{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-users"></i> ניהול לידים</h1>
+        <p>כל הלידים, ניקוד, ומעקב סטטוס</p>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="document.getElementById('addLeadModal').style.display='block'"><i class="fas fa-plus"></i> ליד חדש</button>
+        <a href="/api/export/leads?format=csv" class="btn btn-secondary"><i class="fas fa-download"></i> ייצוא CSV</a>
+    </div>
+</div>
+
+<div class="filters-card">
+    <div class="filter-group">
+        <label>סטטוס:</label>
+        <select id="statusFilter" onchange="loadLeads()">
+            <option value="">הכל</option>
+            <option value="new">חדש</option>
+            <option value="contacted">ליצרנו קשר</option>
+            <option value="qualified">מתאים</option>
+            <option value="consultation_booked">נקבעה פגישה</option>
+            <option value="converted">הומר</option>
+            <option value="lost">אבוד</option>
+        </select>
+    </div>
+    <div class="filter-group">
+        <label>מקור:</label>
+        <select id="sourceFilter" onchange="loadLeads()">
+            <option value="">הכל</option>
+            <option value="google">Google</option>
+            <option value="facebook">Facebook</option>
+            <option value="instagram">Instagram</option>
+            <option value="organic">Organic</option>
+            <option value="referral">הפניה</option>
+        </select>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>שם</th>
+                    <th>טלפון</th>
+                    <th>מקור</th>
+                    <th>ניקוד</th>
+                    <th>סטטוס</th>
+                    <th>תאריך</th>
+                    <th>פעולות</th>
+                </tr>
+            </thead>
+            <tbody id="leadsTable">
+                <tr><td colspan="7" style="text-align:center;padding:2rem;">טוען...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Lead Modal -->
+<div id="addLeadModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>הוספת ליד חדש</h2>
+            <span class="close" onclick="closeModal('addLeadModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="addLeadForm">
+                <div class="form-row">
+                    <div class="form-group"><label>שם מלא *</label><input type="text" name="name" required></div>
+                    <div class="form-group"><label>טלפון *</label><input type="tel" name="phone" required></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>אימייל</label><input type="email" name="email"></div>
+                    <div class="form-group"><label>מקור</label>
+                        <select name="source">
+                            <option value="organic">Organic</option>
+                            <option value="google">Google</option>
+                            <option value="facebook">Facebook</option>
+                            <option value="instagram">Instagram</option>
+                            <option value="referral">הפניה</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>מיקום</label><input type="text" name="location" placeholder="הרצליה"></div>
+                    <div class="form-group"><label>סוג פרויקט</label>
+                        <select name="project_type">
+                            <option value="">לא צוין</option>
+                            <option value="new_build">בנייה חדשה</option>
+                            <option value="renovation">שיפוץ</option>
+                            <option value="consultation">ייעוץ</option>
+                        </select>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('addLeadModal')">ביטול</button>
+            <button class="btn btn-primary" onclick="submitLead()"><i class="fas fa-plus"></i> הוסף</button>
+        </div>
+    </div>
+</div>
+
+<!-- Status Update Modal -->
+<div id="statusModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>עדכון סטטוס</h2>
+            <span class="close" onclick="closeModal('statusModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="statusLeadId">
+            <div class="form-group"><label>סטטוס חדש</label>
+                <select id="newStatus">
+                    <option value="new">חדש</option>
+                    <option value="contacted">ליצרנו קשר</option>
+                    <option value="qualified">מתאים</option>
+                    <option value="consultation_booked">נקבעה פגישה</option>
+                    <option value="converted">הומר</option>
+                    <option value="lost">אבוד</option>
+                </select>
+            </div>
+            <div class="form-group"><label>הערות</label><textarea id="statusNotes" rows="3"></textarea></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('statusModal')">ביטול</button>
+            <button class="btn btn-primary" onclick="updateStatus()">שמור</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const STATUS_MAP = { new: 'חדש', contacted: 'ליצרנו קשר', qualified: 'מתאים', consultation_booked: 'נקבעה פגישה', converted: 'הומר', lost: 'אבוד' };
+
+async function loadLeads() {
+    const status = document.getElementById('statusFilter').value;
+    const source = document.getElementById('sourceFilter').value;
+    let url = '/api/leads?';
+    if (status) url += `status=${status}&`;
+    if (source) url += `source=${source}&`;
+
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const tbody = document.getElementById('leadsTable');
+
+        if (!data.success || !data.leads.length) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;">אין לידים</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.leads.map(l => `
+            <tr>
+                <td><strong>${escapeHtml(l.name || '—')}</strong></td>
+                <td>${escapeHtml(l.phone || '—')}</td>
+                <td><span class="badge badge-${escapeHtml(l.source)}">${escapeHtml(l.source)}</span></td>
+                <td>${l.quality_score ? `<span class="badge badge-score">★ ${escapeHtml(String(l.quality_score))}</span>` : '—'}</td>
+                <td><span class="badge badge-${escapeHtml(l.status)}">${escapeHtml(STATUS_MAP[l.status] || l.status)}</span></td>
+                <td style="font-size:.8rem">${l.timestamp ? new Date(l.timestamp).toLocaleDateString('he-IL') : '—'}</td>
+                <td><button class="btn-icon" onclick="openStatus('${escapeHtml(String(l.id))}')"><i class="fas fa-edit"></i></button></td>
+            </tr>
+        `).join('');
+    } catch (e) { console.error(e); }
+}
+
+async function submitLead() {
+    const form = document.getElementById('addLeadForm');
+    const data = Object.fromEntries(new FormData(form));
+    try {
+        const res = await fetch('/api/leads', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+        const result = await res.json();
+        if (result.success) {
+            closeModal('addLeadModal');
+            form.reset();
+            loadLeads();
+            showFlash('ליד נוסף בהצלחה');
+        } else {
+            alert(result.error || 'שגיאה');
+        }
+    } catch (e) { alert('שגיאה: ' + e.message); }
+}
+
+function openStatus(id) {
+    document.getElementById('statusLeadId').value = id;
+    document.getElementById('statusModal').style.display = 'block';
+}
+
+async function updateStatus() {
+    const id = document.getElementById('statusLeadId').value;
+    const status = document.getElementById('newStatus').value;
+    const notes = document.getElementById('statusNotes').value;
+    try {
+        await fetch(`/api/leads/${id}/status`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status, notes}) });
+        closeModal('statusModal');
+        loadLeads();
+    } catch (e) { console.error(e); }
+}
+
+document.addEventListener('DOMContentLoaded', loadLeads);
+</script>
+{% endblock %}

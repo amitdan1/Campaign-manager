@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}אינטגרציות{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-plug"></i> אינטגרציות</h1>
+        <p>ניהול חיבורים לשירותים חיצוניים</p>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-secondary" onclick="loadIntegrations()"><i class="fas fa-sync-alt"></i> רענן</button>
+    </div>
+</div>
+
+<!-- Summary strip -->
+<div class="integration-summary" id="integSummary">
+    <div class="integration-summary-item">
+        <span class="summary-count" id="connectedCount">-</span>
+        <span class="summary-label">מחוברים</span>
+    </div>
+    <div class="integration-summary-item">
+        <span class="summary-count" id="disconnectedCount">-</span>
+        <span class="summary-label">לא מחוברים</span>
+    </div>
+    <div class="integration-summary-item">
+        <span class="summary-count" id="totalCount">-</span>
+        <span class="summary-label">סה"כ</span>
+    </div>
+</div>
+
+<!-- Integration cards grid -->
+<div class="integration-grid" id="integrationGrid">
+    <div class="empty-state"><p>טוען אינטגרציות...</p></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let integrationsData = [];
+
+async function loadIntegrations() {
+    try {
+        const res = await fetch('/api/integrations');
+        const data = await res.json();
+        if (!data.success) { showFlash('שגיאה בטעינת אינטגרציות', 'danger'); return; }
+        integrationsData = data.integrations;
+        renderIntegrations();
+    } catch (e) {
+        console.error(e);
+        showFlash('שגיאה בטעינת אינטגרציות', 'danger');
+    }
+}
+
+function renderIntegrations() {
+    const grid = document.getElementById('integrationGrid');
+    const connected = integrationsData.filter(i => i.connected).length;
+    const disconnected = integrationsData.length - connected;
+
+    document.getElementById('connectedCount').textContent = connected;
+    document.getElementById('disconnectedCount').textContent = disconnected;
+    document.getElementById('totalCount').textContent = integrationsData.length;
+
+    grid.innerHTML = integrationsData.map(integ => `
+        <div class="integration-card ${integ.connected ? 'connected' : 'disconnected'}">
+            <div class="integration-card-header">
+                <div class="integration-icon-wrap">
+                    <i class="fas ${integ.icon}"></i>
+                </div>
+                <div class="integration-title-area">
+                    <h3>${escapeHtml(integ.name)}</h3>
+                    <p>${escapeHtml(integ.description)}</p>
+                </div>
+                <div class="integration-status-badge ${integ.connected ? 'badge-connected' : 'badge-disconnected'}">
+                    <i class="fas ${integ.connected ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                    ${integ.connected ? 'מחובר' : 'לא מחובר'}
+                </div>
+            </div>
+
+            <div class="integration-card-body">
+                <form onsubmit="saveIntegration(event, '${integ.id}')" id="form-${integ.id}">
+                    ${integ.fields.map(f => `
+                        <div class="integration-field">
+                            <label for="field-${integ.id}-${f.key}">
+                                ${escapeHtml(f.label)}
+                                ${f.required ? '<span class="field-required">*</span>' : ''}
+                            </label>
+                            <div class="field-input-wrap">
+                                <input
+                                    type="${f.secret ? 'password' : 'text'}"
+                                    id="field-${integ.id}-${f.key}"
+                                    data-key="${f.key}"
+                                    placeholder="${f.secret ? (f.has_value ? f.masked : 'הזן ערך...') : (f.has_value ? f.value : 'הזן ערך...')}"
+                                    ${!f.secret && f.has_value ? `value="${f.value}"` : ''}
+                                    autocomplete="off"
+                                >
+                                ${f.secret ? `
+                                    <button type="button" class="field-toggle-btn" onclick="toggleFieldVisibility(this)" title="הצג/הסתר">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </form>
+            </div>
+
+            <div class="integration-card-footer">
+                <button class="btn btn-secondary btn-sm" onclick="testConnection('${integ.id}')" id="test-btn-${integ.id}">
+                    <i class="fas fa-wifi"></i> בדוק חיבור
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="saveIntegration(null, '${integ.id}')">
+                    <i class="fas fa-save"></i> שמור
+                </button>
+            </div>
+
+            <div class="integration-test-result" id="test-result-${integ.id}" style="display:none;"></div>
+        </div>
+    `).join('');
+}
+
+function toggleFieldVisibility(btn) {
+    const input = btn.parentElement.querySelector('input');
+    const icon = btn.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.replace('fa-eye', 'fa-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.replace('fa-eye-slash', 'fa-eye');
+    }
+}
+
+async function saveIntegration(event, integrationId) {
+    if (event) event.preventDefault();
+
+    const form = document.getElementById(`form-${integrationId}`);
+    const inputs = form.querySelectorAll('input[data-key]');
+    const fields = {};
+
+    inputs.forEach(input => {
+        const val = input.value.trim();
+        // Only send fields that the user actually typed into
+        if (val) {
+            fields[input.dataset.key] = val;
+        }
+    });
+
+    if (Object.keys(fields).length === 0) {
+        showFlash('לא הוזנו ערכים חדשים', 'warning');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/integrations/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ integration_id: integrationId, fields })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showFlash('המפתחות נשמרו בהצלחה', 'success');
+            // Clear input values and reload status
+            inputs.forEach(input => input.value = '');
+            await loadIntegrations();
+        } else {
+            showFlash(data.error || 'שגיאה בשמירה', 'danger');
+        }
+    } catch (e) {
+        showFlash('שגיאה בשמירה', 'danger');
+    }
+}
+
+async function testConnection(integrationId) {
+    const btn = document.getElementById(`test-btn-${integrationId}`);
+    const resultEl = document.getElementById(`test-result-${integrationId}`);
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> בודק...';
+    resultEl.style.display = 'none';
+
+    try {
+        const res = await fetch('/api/integrations/test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ integration_id: integrationId })
+        });
+        const data = await res.json();
+
+        resultEl.style.display = 'block';
+        resultEl.className = `integration-test-result ${data.success ? 'test-success' : 'test-failure'}`;
+        resultEl.innerHTML = `<i class="fas ${data.success ? 'fa-check-circle' : 'fa-exclamation-triangle'}"></i> ${escapeHtml(data.message)}`;
+    } catch (e) {
+        resultEl.style.display = 'block';
+        resultEl.className = 'integration-test-result test-failure';
+        resultEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> שגיאה בבדיקת חיבור';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-wifi"></i> בדוק חיבור';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadIntegrations);
+</script>
+{% endblock %}

@@ -1,0 +1,292 @@
+openapi: "3.0.3"
+info:
+  title: Ofir Assulin Performance Marketing API
+  version: "1.0.0"
+  description: |
+    API for the autonomous AI-powered performance marketing system for Ofir Assulin Interior Design.
+    Manages leads, campaigns, proposals, landing pages, brand assets, integrations, A/B tests, and analytics.
+
+servers:
+  - url: http://localhost:5000
+    description: Local development
+
+paths:
+  /api/dashboard/stats:
+    get:
+      summary: Dashboard statistics
+      tags: [Dashboard]
+      responses:
+        "200":
+          description: Dashboard stats with lead counts, KPIs, and charts data
+
+  /api/leads:
+    get:
+      summary: List leads
+      tags: [Leads]
+      parameters:
+        - {name: status, in: query, schema: {type: string}}
+        - {name: source, in: query, schema: {type: string}}
+        - {name: page, in: query, schema: {type: integer, default: 1}}
+        - {name: per_page, in: query, schema: {type: integer, default: 50}}
+      responses:
+        "200":
+          description: Paginated list of leads
+    post:
+      summary: Create a new lead
+      tags: [Leads]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, phone]
+              properties:
+                name: {type: string}
+                phone: {type: string}
+                email: {type: string}
+                source: {type: string, default: organic}
+                campaign: {type: string}
+                location: {type: string}
+                budget: {type: string}
+                project_type: {type: string}
+      responses:
+        "201":
+          description: Lead created and scored
+
+  /api/leads/{lead_id}/status:
+    put:
+      summary: Update lead status
+      tags: [Leads]
+      parameters:
+        - {name: lead_id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: {type: string}
+                notes: {type: string}
+      responses:
+        "200":
+          description: Status updated
+
+  /api/proposals:
+    get:
+      summary: List proposals
+      tags: [Proposals]
+      parameters:
+        - {name: status, in: query, schema: {type: string}}
+        - {name: page, in: query, schema: {type: integer, default: 1}}
+      responses:
+        "200":
+          description: Paginated list of proposals
+    post:
+      summary: Create a proposal
+      tags: [Proposals]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: {type: string}
+                summary: {type: string}
+                proposal_type: {type: string}
+                content: {type: object}
+                agent_name: {type: string}
+      responses:
+        "201":
+          description: Proposal created
+
+  /api/proposals/{id}/status:
+    put:
+      summary: Update proposal status
+      tags: [Proposals]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: {type: string, enum: [approved, rejected, revision_requested, executing, completed]}
+                feedback: {type: string}
+      responses:
+        "200":
+          description: Status updated
+
+  /api/landing-pages/generate:
+    post:
+      summary: Generate a landing page
+      tags: [Landing Pages]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                campaign_name: {type: string}
+                campaign_details: {type: string}
+                variant: {type: string, enum: [hero_gallery, split_layout, story_flow]}
+      responses:
+        "201":
+          description: Landing page generated as proposal
+
+  /api/campaigns:
+    get:
+      summary: List campaigns
+      tags: [Campaigns]
+      responses:
+        "200":
+          description: Campaign metrics list
+
+  /api/campaigns/metrics:
+    post:
+      summary: Add campaign metrics
+      tags: [Campaigns]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                campaign_name: {type: string}
+                platform: {type: string}
+                impressions: {type: integer}
+                clicks: {type: integer}
+                conversions: {type: integer}
+                cost: {type: number}
+      responses:
+        "201":
+          description: Metrics recorded
+
+  /api/chat:
+    post:
+      summary: Chat with the AI orchestrator
+      tags: [Chat]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: {type: string}
+      responses:
+        "200":
+          description: Agent response
+
+  /api/assets:
+    get:
+      summary: List brand assets
+      tags: [Brand Assets]
+      responses:
+        "200":
+          description: List of brand assets
+
+  /api/assets/scrape:
+    post:
+      summary: Trigger brand asset scraping
+      tags: [Brand Assets]
+      responses:
+        "200":
+          description: Scraping results
+
+  /api/integrations:
+    get:
+      summary: List integrations and their status
+      tags: [Integrations]
+      responses:
+        "200":
+          description: Integration statuses
+
+  /api/integrations/save:
+    post:
+      summary: Save integration API keys
+      tags: [Integrations]
+      responses:
+        "200":
+          description: Keys saved
+
+  /api/integrations/test:
+    post:
+      summary: Test integration connection
+      tags: [Integrations]
+      responses:
+        "200":
+          description: Connection test result
+
+  /api/ab-tests:
+    get:
+      summary: List A/B tests
+      tags: [A/B Testing]
+      responses:
+        "200":
+          description: List of tests
+    post:
+      summary: Create A/B test
+      tags: [A/B Testing]
+      responses:
+        "201":
+          description: Test created
+
+  /api/analytics/trends:
+    get:
+      summary: Lead and spend trends
+      tags: [Analytics]
+      responses:
+        "200":
+          description: Daily trend data
+
+  /api/analytics/funnel:
+    get:
+      summary: Conversion funnel data
+      tags: [Analytics]
+      responses:
+        "200":
+          description: Funnel stage counts
+
+  /api/analytics/budget:
+    get:
+      summary: Budget allocation vs spend
+      tags: [Analytics]
+      responses:
+        "200":
+          description: Budget comparison
+
+  /api/agents/status:
+    get:
+      summary: Agent health status
+      tags: [System]
+      responses:
+        "200":
+          description: Health of all agents
+
+  /api/health:
+    get:
+      summary: System health check
+      tags: [System]
+      responses:
+        "200":
+          description: System health
+
+  /webhooks/meta/leads:
+    post:
+      summary: Meta Lead Ads webhook
+      tags: [Webhooks]
+      responses:
+        "200":
+          description: Lead processed
+
+  /webhooks/google/leads:
+    post:
+      summary: Google Lead Forms webhook
+      tags: [Webhooks]
+      responses:
+        "200":
+          description: Lead processed

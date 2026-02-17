@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}קמפיינים{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-bullhorn"></i> קמפיינים</h1>
+        <p>מעקב ביצועי קמפיינים בכל הפלטפורמות</p>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="document.getElementById('addCampaignModal').style.display='block'"><i class="fas fa-plus"></i> הוסף מדדים</button>
+    </div>
+</div>
+
+<!-- Metrics Cards -->
+<div class="metrics-grid" id="metricsGrid" style="margin-bottom: 2rem;"></div>
+
+<!-- Campaigns Table -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>קמפיין</th>
+                    <th>פלטפורמה</th>
+                    <th>חשיפות</th>
+                    <th>קליקים</th>
+                    <th>CTR</th>
+                    <th>המרות</th>
+                    <th>עלות</th>
+                    <th>CPL</th>
+                </tr>
+            </thead>
+            <tbody id="campaignsTable">
+                <tr><td colspan="8" style="text-align:center;padding:2rem;">טוען...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Campaign Metrics Modal -->
+<div id="addCampaignModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>הוספת מדדי קמפיין</h2>
+            <span class="close" onclick="closeModal('addCampaignModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="addCampaignForm">
+                <div class="form-row">
+                    <div class="form-group"><label>שם קמפיין *</label><input type="text" name="campaign_name" required></div>
+                    <div class="form-group"><label>פלטפורמה</label>
+                        <select name="platform"><option value="google">Google Ads</option><option value="facebook">Facebook</option><option value="instagram">Instagram</option></select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>חשיפות</label><input type="number" name="impressions" min="0" value="0"></div>
+                    <div class="form-group"><label>קליקים</label><input type="number" name="clicks" min="0" value="0"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>המרות</label><input type="number" name="conversions" min="0" value="0"></div>
+                    <div class="form-group"><label>עלות (₪)</label><input type="number" name="cost" min="0" step="0.01" value="0"></div>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('addCampaignModal')">ביטול</button>
+            <button class="btn btn-primary" onclick="submitCampaign()">שמור</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadCampaigns() {
+    try {
+        const res = await fetch('/api/campaigns');
+        const data = await res.json();
+        const tbody = document.getElementById('campaignsTable');
+
+        if (!data.success || !data.campaigns.length) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;">אין נתוני קמפיינים</td></tr>';
+            renderMetrics([], 0, 0, 0);
+            return;
+        }
+
+        const campaigns = data.campaigns;
+        const totalSpend = campaigns.reduce((s, c) => s + (c.cost || 0), 0);
+        const totalConv = campaigns.reduce((s, c) => s + (c.conversions || 0), 0);
+        const totalClicks = campaigns.reduce((s, c) => s + (c.clicks || 0), 0);
+        renderMetrics(campaigns, totalSpend, totalConv, totalClicks);
+
+        tbody.innerHTML = campaigns.map(c => `
+            <tr>
+                <td><strong>${escapeHtml(c.campaign_name || c.campaign_id)}</strong></td>
+                <td><span class="badge badge-${escapeHtml(c.platform)}">${escapeHtml(c.platform)}</span></td>
+                <td>${formatNumber(c.impressions)}</td>
+                <td>${formatNumber(c.clicks)}</td>
+                <td>${formatPct(c.ctr)}</td>
+                <td>${c.conversions}</td>
+                <td>${formatCurrency(c.cost)}</td>
+                <td>${c.cpl > 0 ? formatCurrency(c.cpl) : '—'}</td>
+            </tr>
+        `).join('');
+    } catch (e) { console.error(e); }
+}
+
+function renderMetrics(campaigns, totalSpend, totalConv, totalClicks) {
+    const avgCPL = totalConv > 0 ? totalSpend / totalConv : 0;
+    document.getElementById('metricsGrid').innerHTML = `
+        <div class="metric-item"><label>הוצאה כוללת</label><div class="metric-value"><span>${formatCurrency(totalSpend)}</span></div></div>
+        <div class="metric-item"><label>סה"כ המרות</label><div class="metric-value"><span>${totalConv}</span></div></div>
+        <div class="metric-item"><label>עלות ממוצעת לליד</label><div class="metric-value"><span>${avgCPL > 0 ? formatCurrency(avgCPL) : '—'}</span></div></div>
+        <div class="metric-item"><label>סה"כ קליקים</label><div class="metric-value"><span>${formatNumber(totalClicks)}</span></div></div>
+    `;
+}
+
+async function submitCampaign() {
+    const form = document.getElementById('addCampaignForm');
+    const data = Object.fromEntries(new FormData(form));
+    data.impressions = parseInt(data.impressions) || 0;
+    data.clicks = parseInt(data.clicks) || 0;
+    data.conversions = parseInt(data.conversions) || 0;
+    data.cost = parseFloat(data.cost) || 0;
+
+    try {
+        const res = await fetch('/api/campaigns/metrics', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+        const result = await res.json();
+        if (result.success) {
+            closeModal('addCampaignModal');
+            form.reset();
+            loadCampaigns();
+            showFlash('מדדים נוספו בהצלחה');
+        } else { alert(result.error || 'שגיאה'); }
+    } catch (e) { alert('שגיאה: ' + e.message); }
+}
+
+document.addEventListener('DOMContentLoaded', loadCampaigns);
+</script>
+{% endblock %}

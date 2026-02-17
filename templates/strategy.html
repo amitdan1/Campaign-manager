@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}אסטרטגיה{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-lightbulb"></i> אסטרטגיית שיווק</h1>
+        <p>תכנון אסטרטגי לעסק של אופיר אסולין עיצוב פנים</p>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="generatePlan()"><i class="fas fa-magic"></i> צור תוכנית שבועית</button>
+    </div>
+</div>
+
+<!-- Budget Overview -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon" style="background: var(--accent);"><i class="fas fa-wallet"></i></div>
+        <div class="stat-content"><h3>₪500</h3><p>תקציב חודשי</p></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: #4285f4;"><i class="fab fa-google"></i></div>
+        <div class="stat-content"><h3>₪300</h3><p>Google Ads</p></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: #1877f2;"><i class="fab fa-facebook"></i></div>
+        <div class="stat-content"><h3>₪200</h3><p>Facebook / Instagram</p></div>
+    </div>
+</div>
+
+<!-- Strategy Details -->
+<div class="content-row">
+    <div class="card">
+        <div class="card-header"><h3>קהל יעד</h3></div>
+        <div class="card-body">
+            <div class="strategy-section">
+                <h4>דמוגרפיה</h4>
+                <ul>
+                    <li>גיל: 35-55</li>
+                    <li>הכנסה: גבוהה (₪25,000+/חודש)</li>
+                    <li>בעלי נכסים: דירות גדולות, וילות, פנטהאוזים</li>
+                    <li>אזור: הרצליה פיתוח, כפר שמריהו, סביון, תל אביב</li>
+                </ul>
+            </div>
+            <div class="strategy-section">
+                <h4>פרופיל לקוח אידאלי</h4>
+                <ul>
+                    <li>רוכשי דירות חדשות שצריכים עיצוב מלא</li>
+                    <li>בעלי בתים שרוצים לשפץ/לעדכן</li>
+                    <li>סגנון: מודרני-חם, מינימליסטי, יוקרתי</li>
+                    <li>תקציב פרויקט: ₪100K+</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3>ערוצי שיווק</h3></div>
+        <div class="card-body">
+            <div class="channel-strategy">
+                <div class="channel-item">
+                    <h4><i class="fab fa-google" style="color:#4285f4"></i> Google Ads (₪300/חודש)</h4>
+                    <ul>
+                        <li>קמפיין חיפוש עם מילות מפתח בעברית</li>
+                        <li>מיקוד גיאוגרפי: מרכז ישראל בלבד</li>
+                        <li>מילות מפתח: "מעצבת פנים הרצליה", "עיצוב פנים יוקרתי"</li>
+                    </ul>
+                </div>
+                <div class="channel-item">
+                    <h4><i class="fab fa-facebook" style="color:#1877f2"></i> Facebook / Instagram (₪200/חודש)</h4>
+                    <ul>
+                        <li>קמפיין לידים עם טפסים מובנים</li>
+                        <li>תוכן ויזואלי: תמונות פרויקטים, סרטונים</li>
+                        <li>קהלי Lookalike מבקרי האתר</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- KPIs -->
+<div class="card">
+    <div class="card-header"><h3>יעדי KPI</h3></div>
+    <div class="card-body">
+        <table class="kpi-table">
+            <thead><tr><th>מדד</th><th>יעד</th><th>הערות</th></tr></thead>
+            <tbody>
+                <tr><td>עלות לליד (CPL)</td><td>₪150-250</td><td>תלוי בפלטפורמה</td></tr>
+                <tr><td>אחוז פגישות ייעוץ</td><td>40%+</td><td>מתוך כלל הלידים</td></tr>
+                <tr><td>אחוז המרה</td><td>50%+</td><td>מפגישות לפרויקטים</td></tr>
+                <tr><td>CAC</td><td>₪200-400</td><td>עלות רכישת לקוח</td></tr>
+                <tr><td>ROAS</td><td>200:1+</td><td>אפילו פרויקט 1 לחודש = ROI עצום</td></tr>
+                <tr><td>לידים לחודש</td><td>8-15</td><td>בתקציב ₪500</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function generatePlan() {
+    const btn = event.target.closest('button');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> מייצר תוכנית...';
+
+    try {
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message: 'צור תוכנית שיווק שבועית חדשה'})
+        });
+        const data = await res.json();
+        if (data.success) {
+            showFlash('תוכנית נוצרה! בדוק בלוח ההצעות.');
+            setTimeout(() => window.location.href = '/proposals', 1500);
+        }
+    } catch (e) { alert('שגיאה: ' + e.message); }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-magic"></i> צור תוכנית שבועית';
+}
+</script>
+{% endblock %}

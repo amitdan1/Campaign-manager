@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Marketing Agent{% endblock %} | Ofir Assulin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-gem" style="color: var(--accent); font-size: 1.1rem;"></i>
+            <span>Ofir Assulin</span>
+        </div>
+
+        <ul class="sidebar-nav">
+            <div class="sidebar-section">ראשי</div>
+            <li><a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}"><i class="fas fa-chart-pie"></i> <span>דשבורד</span></a></li>
+            <li><a href="{{ url_for('proposals_page') }}" class="{% if request.endpoint == 'proposals_page' %}active{% endif %}"><i class="fas fa-clipboard-check"></i> <span>הצעות</span></a></li>
+
+            <div class="sidebar-section">שיווק</div>
+            <li><a href="{{ url_for('leads_page') }}" class="{% if request.endpoint == 'leads_page' %}active{% endif %}"><i class="fas fa-users"></i> <span>לידים</span></a></li>
+            <li><a href="{{ url_for('campaigns_page') }}" class="{% if request.endpoint == 'campaigns_page' %}active{% endif %}"><i class="fas fa-bullhorn"></i> <span>קמפיינים</span></a></li>
+            <li><a href="{{ url_for('landing_pages_page') }}" class="{% if request.endpoint == 'landing_pages_page' %}active{% endif %}"><i class="fas fa-file-alt"></i> <span>דפי נחיתה</span></a></li>
+
+            <div class="sidebar-section">תוכן</div>
+            <li><a href="{{ url_for('assets_page') }}" class="{% if request.endpoint == 'assets_page' %}active{% endif %}"><i class="fas fa-images"></i> <span>נכסי מותג</span></a></li>
+
+            <div class="sidebar-section">מערכת</div>
+            <li><a href="{{ url_for('agents_page') }}" class="{% if request.endpoint == 'agents_page' %}active{% endif %}"><i class="fas fa-robot"></i> <span>סוכנים</span></a></li>
+            <li><a href="{{ url_for('strategy_page') }}" class="{% if request.endpoint == 'strategy_page' %}active{% endif %}"><i class="fas fa-lightbulb"></i> <span>אסטרטגיה</span></a></li>
+            <li><a href="{{ url_for('integrations_page') }}" class="{% if request.endpoint == 'integrations_page' %}active{% endif %}"><i class="fas fa-plug"></i> <span>אינטגרציות</span></a></li>
+        </ul>
+
+        <div class="sidebar-footer">
+            &copy; 2026 Performance Marketing
+        </div>
+    </nav>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- Chat Toggle Button -->
+    <button class="chat-toggle" onclick="toggleChat()" title="צ'אט עם הסוכנים">
+        <i class="fas fa-comments"></i>
+    </button>
+
+    <!-- Chat Panel -->
+    <div class="chat-panel" id="chatPanel">
+        <div class="chat-panel-header">
+            <span><i class="fas fa-robot"></i> צ'אט עם הסוכנים</span>
+            <button class="close" onclick="toggleChat()">&times;</button>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="chat-msg agent">
+                <div class="agent-name">Orchestrator</div>
+                שלום! אני מנהל הסוכנים. איך אפשר לעזור?
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chatInput" placeholder="שלח הודעה..." onkeypress="if(event.key==='Enter')sendChat()">
+            <button onclick="sendChat()"><i class="fas fa-paper-plane"></i></button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        function toggleChat() {
+            document.getElementById('chatPanel').classList.toggle('open');
+        }
+
+        async function sendChat() {
+            const input = document.getElementById('chatInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            const messagesEl = document.getElementById('chatMessages');
+
+            // Add user message
+            messagesEl.innerHTML += `<div class="chat-msg user">${escapeHtml(msg)}</div>`;
+            input.value = '';
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: msg})
+                });
+                const data = await response.json();
+                if (data.success) {
+                    messagesEl.innerHTML += `<div class="chat-msg agent"><div class="agent-name">${escapeHtml(data.agent || 'Orchestrator')}</div>${escapeHtml(data.response)}</div>`;
+                } else {
+                    messagesEl.innerHTML += `<div class="chat-msg agent"><div class="agent-name">System</div>שגיאה: ${escapeHtml(data.error || 'נסה שוב')}</div>`;
+                }
+            } catch (e) {
+                messagesEl.innerHTML += `<div class="chat-msg agent"><div class="agent-name">System</div>לא ניתן להתחבר לשרת</div>`;
+            }
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}נכסי מותג{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-images"></i> נכסי מותג</h1>
+        <p>ספריית תמונות, טקסטים וסגנון שנאספו מהנוכחות הדיגיטלית של אופיר</p>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="runScraper()"><i class="fas fa-sync-alt"></i> עדכן עכשיו</button>
+    </div>
+</div>
+
+<div class="filters-card">
+    <div class="filter-group">
+        <label>מקור:</label>
+        <select id="sourceFilter" onchange="loadAssets()">
+            <option value="">הכל</option>
+            <option value="website">אתר</option>
+            <option value="instagram">Instagram</option>
+            <option value="facebook">Facebook</option>
+            <option value="tiktok">TikTok</option>
+        </select>
+    </div>
+    <div class="filter-group">
+        <label>סוג:</label>
+        <select id="typeFilter" onchange="loadAssets()">
+            <option value="">הכל</option>
+            <option value="image">תמונה</option>
+            <option value="text">טקסט</option>
+            <option value="video">וידאו</option>
+        </select>
+    </div>
+</div>
+
+<div class="asset-grid" id="assetGrid">
+    <div class="empty-state">
+        <i class="fas fa-images"></i>
+        <h3>אין נכסים עדיין</h3>
+        <p>לחץ "עדכן עכשיו" כדי לאסוף תוכן מהאתר והרשתות החברתיות</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadAssets() {
+    const source = document.getElementById('sourceFilter').value;
+    const type = document.getElementById('typeFilter').value;
+    let url = '/api/assets?';
+    if (source) url += `source=${source}&`;
+    if (type) url += `type=${type}&`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.success && data.assets.length > 0) {
+            document.getElementById('assetGrid').innerHTML = data.assets.map(a => `
+                <div class="asset-card">
+                    ${a.asset_type === 'image' ? `<img src="${escapeHtml(a.local_path || a.url)}" alt="${escapeHtml(a.metadata?.alt || '')}">` : ''}
+                    <div class="asset-card-info">
+                        <strong>${escapeHtml(a.source)}</strong> &middot; ${escapeHtml(a.asset_type)}
+                        ${a.metadata?.caption ? `<p style="margin-top:.3rem;">${escapeHtml(a.metadata.caption.substring(0, 80))}...</p>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            document.getElementById('assetGrid').innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-images"></i>
+                    <h3>אין נכסים</h3>
+                    <p>לחץ "עדכן עכשיו" כדי לאסוף תוכן</p>
+                </div>`;
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+async function runScraper() {
+    const btn = event.target.closest('button');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> אוסף...';
+    try {
+        await fetch('/api/assets/scrape', {method: 'POST'});
+        loadAssets();
+    } catch (e) {
+        alert('שגיאה: ' + e.message);
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-sync-alt"></i> עדכן עכשיו';
+}
+
+document.addEventListener('DOMContentLoaded', loadAssets);
+</script>
+{% endblock %}

@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}דפי נחיתה{% endblock %}
+
+{% block head %}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-file-alt"></i> דפי נחיתה</h1>
+        <p>דפי נחיתה מעוצבים בסגנון המותג של אופיר אסולין</p>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="openGenModal()"><i class="fas fa-magic"></i> צור דף נחיתה חדש</button>
+    </div>
+</div>
+
+<div class="lp-cards" id="lpCards">
+    <div class="empty-state" style="grid-column:1/-1">
+        <i class="fas fa-file-alt"></i>
+        <h3>אין דפי נחיתה עדיין</h3>
+        <p>לחץ "צור דף נחיתה חדש" כדי להתחיל</p>
+    </div>
+</div>
+
+<!-- Full-page Preview -->
+<div class="preview-overlay" id="previewOverlay">
+    <div class="preview-toolbar">
+        <h3 id="previewTitle">תצוגה מקדימה</h3>
+        <div class="device-btns">
+            <button class="device-btn active" onclick="setDevice('desktop')"><i class="fas fa-desktop"></i> Desktop</button>
+            <button class="device-btn" onclick="setDevice('tablet')"><i class="fas fa-tablet-alt"></i> Tablet</button>
+            <button class="device-btn" onclick="setDevice('mobile')"><i class="fas fa-mobile-alt"></i> Mobile</button>
+        </div>
+        <div style="display:flex;gap:.5rem">
+            <a id="previewNewTab" href="#" target="_blank" class="btn btn-secondary btn-sm" style="color:#aaa"><i class="fas fa-external-link-alt"></i> פתח בחלון חדש</a>
+            <button class="btn btn-secondary btn-sm" style="color:#aaa" onclick="closePreview()"><i class="fas fa-times"></i> סגור</button>
+        </div>
+    </div>
+    <div class="preview-frame-wrap desktop" id="previewWrap">
+        <iframe id="previewFrame"></iframe>
+    </div>
+</div>
+
+<!-- Generate LP Modal -->
+<div id="genModal" class="modal">
+    <div class="modal-content" style="max-width:600px">
+        <div class="modal-header">
+            <h2>יצירת דף נחיתה חדש</h2>
+            <span class="close" onclick="closeModal('genModal')">&times;</span>
+        </div>
+        <div class="gen-modal-body">
+            <div class="form-group">
+                <label>שם הקמפיין / נושא הדף</label>
+                <input type="text" id="genCampaign" placeholder="למשל: ייעוץ עיצוב חינמי, שיפוץ דירת יוקרה">
+            </div>
+            <label style="font-size:.85rem;font-weight:600;margin-bottom:.75rem;display:block">בחרו סגנון</label>
+            <div class="variant-picker">
+                <div class="variant-opt selected" data-variant="hero_gallery" onclick="selectVariant(this)">
+                    <i class="fas fa-images"></i>
+                    <span>Hero Gallery</span>
+                    <p style="font-size:.72rem;color:var(--text-secondary);margin-top:.3rem">תמונה מלאה + גלריה</p>
+                </div>
+                <div class="variant-opt" data-variant="split_layout" onclick="selectVariant(this)">
+                    <i class="fas fa-columns"></i>
+                    <span>Split Layout</span>
+                    <p style="font-size:.72rem;color:var(--text-secondary);margin-top:.3rem">תמונה + טקסט צד בצד</p>
+                </div>
+                <div class="variant-opt" data-variant="story_flow" onclick="selectVariant(this)">
+                    <i class="fas fa-scroll"></i>
+                    <span>Story Flow</span>
+                    <p style="font-size:.72rem;color:var(--text-secondary);margin-top:.3rem">סיפור גלילה עם תמונות</p>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>פרטים נוספים (אופציונלי)</label>
+                <textarea id="genDetails" rows="3" placeholder="תיאור נוסף, קהל יעד ספציפי, הצעת ערך מיוחדת..." style="width:100%;padding:.65rem .85rem;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.9rem;background:var(--card-bg);font-family:inherit"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('genModal')">ביטול</button>
+            <button class="btn btn-primary" id="genBtn" onclick="generateLP()"><i class="fas fa-magic"></i> צור דף</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedVariant = 'hero_gallery';
+
+function selectVariant(el) {
+    document.querySelectorAll('.variant-opt').forEach(v => v.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedVariant = el.dataset.variant;
+}
+
+function openGenModal() { document.getElementById('genModal').style.display = 'block'; }
+
+async function generateLP() {
+    const campaign = document.getElementById('genCampaign').value.trim() || 'ייעוץ עיצוב פנים';
+    const details = document.getElementById('genDetails').value.trim();
+    const btn = document.getElementById('genBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> מייצר...';
+
+    try {
+        const res = await fetch('/api/landing-pages/generate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({campaign_name: campaign, campaign_details: details, variant: selectedVariant})
+        });
+        const data = await res.json();
+        if (data.success) {
+            closeModal('genModal');
+            showFlash('דף נחיתה נוצר בהצלחה!');
+            loadLandingPages();
+        } else {
+            alert(data.error || 'שגיאה ביצירת הדף');
+        }
+    } catch (e) { alert('שגיאה: ' + e.message); }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-magic"></i> צור דף';
+}
+
+async function loadLandingPages() {
+    try {
+        const res = await fetch('/api/proposals?proposal_type=landing_page&per_page=100');
+        const data = await res.json();
+        const lps = data.proposals || [];
+        const container = document.getElementById('lpCards');
+
+        if (!lps.length) {
+            container.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-file-alt"></i><h3>אין דפי נחיתה</h3><p>לחץ "צור דף נחיתה חדש"</p></div>';
+            return;
+        }
+
+        container.innerHTML = lps.map(p => {
+            const variant = p.content?.variant || '';
+            const variantLabel = {'hero_gallery':'Hero Gallery','split_layout':'Split Layout','story_flow':'Story Flow'}[variant] || variant;
+            return `
+            <div class="lp-card">
+                <div class="lp-thumb" id="thumb-${p.id}"></div>
+                <div class="lp-card-body">
+                    <h3>${escapeHtml(p.title)}</h3>
+                    <p>${escapeHtml(p.summary || '')} ${variantLabel ? '<span class="badge badge-draft">'+escapeHtml(variantLabel)+'</span>' : ''}</p>
+                    <span class="badge badge-${escapeHtml(p.status)}" style="margin-bottom:.75rem;display:inline-block">${escapeHtml(p.status)}</span>
+                    <div class="lp-card-actions">
+                        <button class="btn btn-primary btn-sm" onclick="openPreview(${p.id})"><i class="fas fa-eye"></i> תצוגה מקדימה</button>
+                        ${p.status === 'pending_review' ? `
+                        <button class="btn btn-success btn-sm" onclick="approvePage(${p.id})"><i class="fas fa-check"></i> אשר</button>
+                        <button class="btn btn-danger btn-sm" onclick="rejectPage(${p.id})"><i class="fas fa-times"></i> דחה</button>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+
+        // Render thumbnail iframes
+        lps.forEach(p => {
+            const el = document.getElementById('thumb-' + p.id);
+            if (el && p.content?.html) {
+                const iframe = document.createElement('iframe');
+                iframe.srcdoc = p.content.html;
+                iframe.sandbox = 'allow-same-origin';
+                el.appendChild(iframe);
+            }
+        });
+    } catch (e) { console.error(e); }
+}
+
+async function openPreview(id) {
+    try {
+        const res = await fetch(`/api/proposals/${id}`);
+        const data = await res.json();
+        if (!data.success) return;
+
+        const html = data.proposal.content?.html || '<p>No content</p>';
+        document.getElementById('previewTitle').textContent = data.proposal.title;
+        document.getElementById('previewFrame').srcdoc = html;
+        document.getElementById('previewNewTab').href = `/landing-pages/${id}/preview`;
+        document.getElementById('previewOverlay').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    } catch (e) { console.error(e); }
+}
+
+function closePreview() {
+    document.getElementById('previewOverlay').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+function setDevice(device) {
+    const wrap = document.getElementById('previewWrap');
+    wrap.className = 'preview-frame-wrap ' + device;
+    document.querySelectorAll('.device-btn').forEach(b => b.classList.remove('active'));
+    event.target.closest('.device-btn').classList.add('active');
+}
+
+async function approvePage(id) {
+    await fetch(`/api/proposals/${id}/status`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'approved'})});
+    loadLandingPages();
+    showFlash('דף נחיתה אושר');
+}
+
+async function rejectPage(id) {
+    await fetch(`/api/proposals/${id}/status`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'rejected'})});
+    loadLandingPages();
+}
+
+// ESC to close preview
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePreview(); });
+document.addEventListener('DOMContentLoaded', loadLandingPages);
+</script>
+{% endblock %}

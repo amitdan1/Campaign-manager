@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block title %}דשבורד{% endblock %}
+
+{% block head %}{% endblock %}
+
+{% block content %}
+<div class="toast-container" id="toastContainer"></div>
+<div class="page-header">
+    <div>
+        <h1>דשבורד</h1>
+        <p>סקירת ביצועים - 30 ימים אחרונים</p>
+    </div>
+    <div class="header-actions">
+        <a href="/proposals" class="btn btn-primary"><i class="fas fa-clipboard-check"></i> הצעות ממתינות (<span id="pendingBadge">0</span>)</a>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="stats-grid" id="statsGrid">
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#c9a96e;"><i class="fas fa-users"></i></div>
+        <div class="stat-content">
+            <h3 id="totalLeads">-</h3>
+            <p>לידים</p>
+            <span class="stat-trend" id="leadsTrend"></span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#4caf50;"><i class="fas fa-star"></i></div>
+        <div class="stat-content">
+            <h3 id="qualifiedLeads">-</h3>
+            <p>לידים איכותיים</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#2196f3;"><i class="fas fa-calendar-check"></i></div>
+        <div class="stat-content">
+            <h3 id="consultations">-</h3>
+            <p>פגישות ייעוץ</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#8bc34a;"><i class="fas fa-handshake"></i></div>
+        <div class="stat-content">
+            <h3 id="conversions">-</h3>
+            <p>המרות</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#ff9800;"><i class="fas fa-shekel-sign"></i></div>
+        <div class="stat-content">
+            <h3 id="avgCPL">-</h3>
+            <p>עלות לליד ממוצעת</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#e91e63;"><i class="fas fa-chart-line"></i></div>
+        <div class="stat-content">
+            <h3 id="consultRate">-</h3>
+            <p>אחוז פגישות</p>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="charts-row">
+    <div class="chart-card">
+        <h3>לידים לפי מקור</h3>
+        <canvas id="sourceChart"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>סטטוס לידים</h3>
+        <canvas id="statusChart"></canvas>
+    </div>
+</div>
+
+<!-- Trend Charts Row -->
+<div class="charts-row">
+    <div class="chart-card">
+        <h3>מגמת לידים (30 יום)</h3>
+        <canvas id="leadsTrendChart"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>משפך המרות</h3>
+        <canvas id="funnelChart"></canvas>
+    </div>
+</div>
+
+<div class="charts-row">
+    <div class="chart-card">
+        <h3>תקציב: הקצאה מול ביצוע</h3>
+        <canvas id="budgetChart"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>מגמת הוצאות (30 יום)</h3>
+        <canvas id="spendTrendChart"></canvas>
+    </div>
+</div>
+
+<!-- Content Row: Recent Leads + Recommendations -->
+<div class="content-row">
+    <div class="card">
+        <div class="card-header">
+            <h3>לידים אחרונים</h3>
+            <a href="/leads" class="btn-link">הצג הכל</a>
+        </div>
+        <div class="card-body" id="recentLeads">
+            <div class="empty-state"><p>טוען...</p></div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <h3>המלצות</h3>
+        </div>
+        <div class="card-body" id="recsContainer">
+            <div class="empty-state"><p>טוען...</p></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const COLORS = { google: '#4285f4', facebook: '#1877f2', instagram: '#e4405f', organic: '#9e9e9e', website: '#c9a96e', referral: '#4caf50', landing_page: '#ff9800' };
+const STATUS_LABELS = { new: 'חדש', contacted: 'ליצרנו קשר', qualified: 'מתאים', consultation_booked: 'נקבעה פגישה', converted: 'הומר', lost: 'אבוד' };
+const STATUS_COLORS = ['#2196f3', '#9c27b0', '#ff9800', '#4caf50', '#8bc34a', '#ef5350'];
+
+let sourceChartInstance = null;
+let statusChartInstance = null;
+
+async function loadDashboard() {
+    try {
+        const [statsRes, leadsRes, recsRes] = await Promise.all([
+            fetch('/api/dashboard/stats'),
+            fetch('/api/leads'),
+            fetch('/api/recommendations'),
+        ]);
+
+        const statsData = await statsRes.json();
+        const leadsData = await leadsRes.json();
+        const recsData = await recsRes.json();
+
+        if (statsData.success) renderStats(statsData.stats);
+        if (leadsData.success) renderRecentLeads(leadsData.leads);
+        if (recsData.success) renderRecs(recsData);
+    } catch (e) {
+        console.error('Dashboard load error:', e);
+        const c = document.getElementById('toastContainer');
+        if (c) { const t = document.createElement('div'); t.className = 'toast toast-error'; t.textContent = 'שגיאה בטעינת הדשבורד. בודק שוב...'; c.appendChild(t); setTimeout(() => t.remove(), 3500); }
+        setTimeout(loadDashboard, 5000);
+    }
+}
+
+function renderStats(s) {
+    document.getElementById('totalLeads').textContent = s.total_leads;
+    document.getElementById('qualifiedLeads').textContent = s.qualified_leads;
+    document.getElementById('consultations').textContent = s.consultations;
+    document.getElementById('conversions').textContent = s.conversions;
+    document.getElementById('avgCPL').textContent = s.avg_cpl > 0 ? formatCurrency(s.avg_cpl) : '-';
+    document.getElementById('consultRate').textContent = s.consultation_rate > 0 ? formatPct(s.consultation_rate) : '-';
+    document.getElementById('pendingBadge').textContent = s.pending_proposals || 0;
+
+    if (s.trend) {
+        const t = document.getElementById('leadsTrend');
+        const v = s.trend.leads;
+        t.textContent = (v >= 0 ? '+' : '') + v + ' מהשבוע הקודם';
+        t.className = 'stat-trend ' + (v >= 0 ? 'positive' : 'negative');
+    }
+
+    // Source chart
+    const srcLabels = Object.keys(s.leads_by_source || {});
+    const srcValues = Object.values(s.leads_by_source || {});
+    const srcColors = srcLabels.map(l => COLORS[l] || '#9e9e9e');
+    if (sourceChartInstance) sourceChartInstance.destroy();
+    sourceChartInstance = new Chart(document.getElementById('sourceChart'), {
+        type: 'doughnut',
+        data: { labels: srcLabels, datasets: [{ data: srcValues, backgroundColor: srcColors }] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', rtl: true } } }
+    });
+
+    // Status chart
+    const statLabels = Object.keys(s.status_breakdown || {}).map(k => STATUS_LABELS[k] || k);
+    const statValues = Object.values(s.status_breakdown || {});
+    if (statusChartInstance) statusChartInstance.destroy();
+    statusChartInstance = new Chart(document.getElementById('statusChart'), {
+        type: 'bar',
+        data: { labels: statLabels, datasets: [{ data: statValues, backgroundColor: STATUS_COLORS.slice(0, statLabels.length) }] },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+}
+
+function renderRecentLeads(leads) {
+    const container = document.getElementById('recentLeads');
+    if (!leads.length) {
+        container.innerHTML = '<div class="empty-state"><p>אין לידים עדיין</p></div>';
+        return;
+    }
+    container.innerHTML = leads.slice(0, 5).map(l => `
+        <div class="lead-item">
+            <div class="lead-info">
+                <strong>${escapeHtml(l.name || 'ללא שם')}</strong>
+                <span class="lead-source">${escapeHtml(l.source || '')} ${l.campaign ? '• ' + escapeHtml(l.campaign) : ''}</span>
+            </div>
+            <div class="lead-meta">
+                ${l.quality_score ? `<span class="badge badge-score">★ ${escapeHtml(String(l.quality_score))}</span>` : ''}
+                <span class="badge badge-${escapeHtml(l.status)}">${escapeHtml(STATUS_LABELS[l.status] || l.status)}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderRecs(data) {
+    const container = document.getElementById('recsContainer');
+    const all = [...(data.campaign_recommendations || []), ...(data.strategy_recommendations || [])];
+    if (!all.length) {
+        container.innerHTML = '<div class="empty-state"><p>אין המלצות</p></div>';
+        return;
+    }
+    container.innerHTML = all.slice(0, 5).map(r => `
+        <div class="recommendation-item">
+            <span class="rec-priority priority-${escapeHtml(r.priority || 'medium')}">${escapeHtml(r.priority || 'med')}</span>
+            <div class="rec-content">
+                <strong>${escapeHtml(r.campaign || r.action || '')}</strong>
+                <p>${escapeHtml(r.reason || '')}</p>
+            </div>
+        </div>
+    `).join('');
+}
+
+// --- Enhanced analytics charts ---
+let leadsTrendInstance = null;
+let funnelInstance = null;
+let budgetInstance = null;
+let spendTrendInstance = null;
+
+async function loadAnalytics() {
+    try {
+        const [trendsRes, funnelRes, budgetRes] = await Promise.all([
+            fetch('/api/analytics/trends'),
+            fetch('/api/analytics/funnel'),
+            fetch('/api/analytics/budget'),
+        ]);
+        const trends = await trendsRes.json();
+        const funnel = await funnelRes.json();
+        const budget = await budgetRes.json();
+
+        if (trends.success) {
+            // Leads trend line chart
+            if (leadsTrendInstance) leadsTrendInstance.destroy();
+            leadsTrendInstance = new Chart(document.getElementById('leadsTrendChart'), {
+                type: 'line',
+                data: {
+                    labels: trends.leads_trend.map(d => d.date.slice(5)),
+                    datasets: [{data: trends.leads_trend.map(d => d.count), borderColor: '#c9a96e', backgroundColor: 'rgba(201,169,110,.1)', fill: true, tension: .3}],
+                },
+                options: {responsive: true, plugins: {legend: {display: false}}, scales: {y: {beginAtZero: true, ticks: {stepSize: 1}}}}
+            });
+
+            // Spend trend
+            if (spendTrendInstance) spendTrendInstance.destroy();
+            spendTrendInstance = new Chart(document.getElementById('spendTrendChart'), {
+                type: 'bar',
+                data: {
+                    labels: trends.spend_trend.map(d => d.date.slice(5)),
+                    datasets: [{data: trends.spend_trend.map(d => d.spend), backgroundColor: '#ff9800'}],
+                },
+                options: {responsive: true, plugins: {legend: {display: false}}, scales: {y: {beginAtZero: true}}}
+            });
+        }
+
+        if (funnel.success) {
+            if (funnelInstance) funnelInstance.destroy();
+            const funnelColors = ['#2196f3', '#9c27b0', '#ff9800', '#4caf50', '#8bc34a'];
+            funnelInstance = new Chart(document.getElementById('funnelChart'), {
+                type: 'bar',
+                data: {
+                    labels: funnel.funnel.map(f => f.stage),
+                    datasets: [{data: funnel.funnel.map(f => f.count), backgroundColor: funnelColors}],
+                },
+                options: {responsive: true, indexAxis: 'y', plugins: {legend: {display: false}}, scales: {x: {beginAtZero: true, ticks: {stepSize: 1}}}}
+            });
+        }
+
+        if (budget.success) {
+            if (budgetInstance) budgetInstance.destroy();
+            const labels = [...new Set([...Object.keys(budget.allocated), ...Object.keys(budget.spent)])];
+            budgetInstance = new Chart(document.getElementById('budgetChart'), {
+                type: 'bar',
+                data: {
+                    labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+                    datasets: [
+                        {label: 'הוקצה', data: labels.map(l => budget.allocated[l] || 0), backgroundColor: '#c9a96e'},
+                        {label: 'בוצע', data: labels.map(l => budget.spent[l] || 0), backgroundColor: '#4caf50'},
+                    ],
+                },
+                options: {responsive: true, plugins: {legend: {position: 'bottom', rtl: true}}, scales: {y: {beginAtZero: true}}}
+            });
+        }
+    } catch (e) {
+        console.error('Analytics load error:', e);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => { loadDashboard(); loadAnalytics(); });
+setInterval(loadDashboard, 60000);
+</script>
+{% endblock %}

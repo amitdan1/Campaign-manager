@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}הצעות{% endblock %}
+
+{% block head %}{% endblock %}
+
+{% block content %}
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-clipboard-check"></i> לוח הצעות</h1>
+        <p>סקירה ואישור הצעות מהסוכנים</p>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="openInputModal('newProposal')"><i class="fas fa-plus"></i> בקש הצעה חדשה</button>
+    </div>
+</div>
+
+<div class="kanban-board" id="kanbanBoard">
+    <div class="kanban-column" data-status="pending_review">
+        <div class="kanban-column-header">
+            <span>ממתין לאישור</span>
+            <span class="count" id="pendingCount">0</span>
+        </div>
+        <div id="pendingCards"><div class="skeleton"></div><div class="skeleton"></div></div>
+    </div>
+    <div class="kanban-column" data-status="approved">
+        <div class="kanban-column-header">
+            <span>אושר</span>
+            <span class="count" id="approvedCount">0</span>
+        </div>
+        <div id="approvedCards"><div class="skeleton"></div></div>
+    </div>
+    <div class="kanban-column" data-status="executing">
+        <div class="kanban-column-header">
+            <span>בביצוע</span>
+            <span class="count" id="executingCount">0</span>
+        </div>
+        <div id="executingCards"></div>
+    </div>
+    <div class="kanban-column" data-status="completed">
+        <div class="kanban-column-header">
+            <span>הושלם</span>
+            <span class="count" id="completedCount">0</span>
+        </div>
+        <div id="completedCards"></div>
+    </div>
+</div>
+
+<!-- Proposal Detail Modal -->
+<div id="proposalModal" class="modal modal-large">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="proposalTitle">הצעה</h2>
+            <span class="close" onclick="closeModal('proposalModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div id="proposalDetail"></div>
+        </div>
+        <div class="modal-footer" id="proposalActions"></div>
+    </div>
+</div>
+
+<!-- D1: Revision Feedback Modal (replaces prompt()) -->
+<div id="revisionModal" class="modal">
+    <div class="modal-content input-modal-content" style="max-width:500px">
+        <div class="modal-header">
+            <h2>בקשת שינויים</h2>
+            <span class="close" onclick="closeModal('revisionModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p style="margin-bottom:.75rem;color:var(--text-secondary)">מה צריך לשנות בהצעה?</p>
+            <textarea id="revisionFeedback" placeholder="תאר את השינויים הנדרשים..."></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('revisionModal')">ביטול</button>
+            <button class="btn btn-primary" onclick="submitRevision()"><i class="fas fa-paper-plane"></i> שלח</button>
+        </div>
+    </div>
+</div>
+
+<!-- D1: New Proposal Request Modal (replaces prompt()) -->
+<div id="newProposalModal" class="modal">
+    <div class="modal-content input-modal-content" style="max-width:500px">
+        <div class="modal-header">
+            <h2>בקשת הצעה חדשה</h2>
+            <span class="close" onclick="closeModal('newProposalModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p style="margin-bottom:.75rem;color:var(--text-secondary)">על מה תרצה שהסוכנים יכינו הצעה?</p>
+            <textarea id="newProposalTopic" placeholder="למשל: קמפיין חדש לגוגל, דף נחיתה לשיפוצים, תוכן לפייסבוק..."></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('newProposalModal')">ביטול</button>
+            <button class="btn btn-primary" onclick="submitNewProposal()"><i class="fas fa-magic"></i> צור הצעה</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentRevisionId = null;
+
+function showToast(msg, type='success') {
+    const c = document.getElementById('toastContainer');
+    const t = document.createElement('div');
+    t.className = 'toast toast-' + type;
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+}
+
+async function loadProposals() {
+    try {
+        const response = await fetch('/api/proposals');
+        const data = await response.json();
+        if (data.success) {
+            renderKanban(data.proposals);
+        }
+    } catch (e) {
+        showToast('שגיאה בטעינת הצעות', 'error');
+    }
+}
+
+function renderKanban(proposals) {
+    const columns = {
+        pending_review: document.getElementById('pendingCards'),
+        approved: document.getElementById('approvedCards'),
+        executing: document.getElementById('executingCards'),
+        completed: document.getElementById('completedCards'),
+    };
+    Object.values(columns).forEach(el => el.innerHTML = '');
+    const counts = {pending_review: 0, approved: 0, executing: 0, completed: 0};
+
+    // Also handle revision_requested and rejected in the pending column
+    proposals.forEach(p => {
+        let targetStatus = p.status;
+        if (targetStatus === 'revision_requested' || targetStatus === 'rejected') targetStatus = 'pending_review';
+        if (targetStatus === 'failed') targetStatus = 'executing';
+        const col = columns[targetStatus];
+        if (!col) return;
+        counts[targetStatus] = (counts[targetStatus] || 0) + 1;
+
+        col.innerHTML += `
+            <div class="proposal-card" onclick="viewProposal(${parseInt(p.id)})">
+                <h4>${escapeHtml(p.title)}</h4>
+                <p>${escapeHtml(p.summary || '')}</p>
+                <div class="proposal-card-meta">
+                    <span class="badge badge-${escapeHtml(p.proposal_type)}">${escapeHtml(p.proposal_type)}</span>
+                    <span class="badge badge-${escapeHtml(p.status)}">${escapeHtml(p.status)}</span>
+                    <span>${escapeHtml(p.agent_name)}</span>
+                </div>
+            </div>`;
+    });
+
+    document.getElementById('pendingCount').textContent = counts.pending_review;
+    document.getElementById('approvedCount').textContent = counts.approved;
+    document.getElementById('executingCount').textContent = counts.executing;
+    document.getElementById('completedCount').textContent = counts.completed;
+}
+
+async function viewProposal(id) {
+    try {
+        const response = await fetch(`/api/proposals/${id}`);
+        const data = await response.json();
+        if (!data.success) return;
+
+        const p = data.proposal;
+        document.getElementById('proposalTitle').textContent = p.title;
+
+        let contentHtml = '';
+        if (p.proposal_type === 'landing_page' && p.content?.html) {
+            contentHtml = `<div style="margin:1rem 0"><a href="/landing-pages/${p.id}/preview" target="_blank" class="btn btn-primary btn-sm"><i class="fas fa-eye"></i> צפה בדף נחיתה</a></div>`;
+        }
+
+        let html = `
+            <p><strong>סוכן:</strong> ${escapeHtml(p.agent_name)}</p>
+            <p><strong>סוג:</strong> ${escapeHtml(p.proposal_type)}</p>
+            <p><strong>סטטוס:</strong> <span class="badge badge-${escapeHtml(p.status)}">${escapeHtml(p.status)}</span></p>
+            <p><strong>תקציר:</strong> ${escapeHtml(p.summary || 'אין')}</p>
+            ${contentHtml}
+            <hr style="margin:1rem 0;border:none;border-top:1px solid var(--border)">
+            <div style="background:var(--bg);padding:1rem;border-radius:var(--radius-sm);white-space:pre-wrap;font-size:.85rem;max-height:400px;overflow:auto">${escapeHtml(JSON.stringify(p.content, null, 2))}</div>`;
+
+        if (p.feedback) {
+            html += `<div class="alert alert-info" style="margin-top:1rem"><strong>משוב:</strong> ${escapeHtml(p.feedback)}</div>`;
+        }
+        document.getElementById('proposalDetail').innerHTML = html;
+
+        let actions = '';
+        if (p.status === 'pending_review') {
+            actions = `
+                <button class="btn btn-success" onclick="updateProposalStatus(${p.id}, 'approved')"><i class="fas fa-check"></i> אשר</button>
+                <button class="btn btn-primary" onclick="openRevisionModal(${p.id})"><i class="fas fa-edit"></i> בקש שינויים</button>
+                <button class="btn btn-danger" onclick="updateProposalStatus(${p.id}, 'rejected')"><i class="fas fa-times"></i> דחה</button>`;
+        } else if (p.status === 'approved') {
+            actions = `<button class="btn btn-primary" onclick="updateProposalStatus(${p.id}, 'executing')"><i class="fas fa-play"></i> בצע עכשיו</button>`;
+        }
+        document.getElementById('proposalActions').innerHTML = actions;
+        document.getElementById('proposalModal').style.display = 'block';
+    } catch (e) { console.error(e); }
+}
+
+async function updateProposalStatus(id, status) {
+    try {
+        const res = await fetch(`/api/proposals/${id}/status`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({status})
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(status === 'approved' ? 'הצעה אושרה!' : 'סטטוס עודכן');
+        } else {
+            showToast(data.error || 'שגיאה', 'error');
+        }
+    } catch (e) { showToast('שגיאה בעדכון', 'error'); }
+    closeModal('proposalModal');
+    loadProposals();
+}
+
+function openRevisionModal(id) {
+    currentRevisionId = id;
+    document.getElementById('revisionFeedback').value = '';
+    closeModal('proposalModal');
+    document.getElementById('revisionModal').style.display = 'block';
+}
+
+async function submitRevision() {
+    const feedback = document.getElementById('revisionFeedback').value.trim();
+    if (!feedback) { showToast('יש להזין משוב', 'error'); return; }
+
+    await fetch(`/api/proposals/${currentRevisionId}/status`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: 'revision_requested', feedback})
+    });
+    closeModal('revisionModal');
+    showToast('בקשת שינויים נשלחה');
+    loadProposals();
+}
+
+function openInputModal(type) {
+    if (type === 'newProposal') document.getElementById('newProposalModal').style.display = 'block';
+}
+
+async function submitNewProposal() {
+    const topic = document.getElementById('newProposalTopic').value.trim();
+    if (!topic) { showToast('יש להזין נושא', 'error'); return; }
+
+    try {
+        await fetch('/api/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message: `צור הצעה: ${topic}`})
+        });
+        closeModal('newProposalModal');
+        showToast('בקשה נשלחה לסוכנים');
+        setTimeout(loadProposals, 2000);
+    } catch (e) { showToast('שגיאה', 'error'); }
+}
+
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+window.onclick = function(e) {
+    document.querySelectorAll('.modal').forEach(m => { if (e.target === m) m.style.display = 'none'; });
+};
+
+document.addEventListener('DOMContentLoaded', loadProposals);
+setInterval(loadProposals, 30000);
+</script>
+{% endblock %}
