@@ -40,7 +40,7 @@ export async function scrapeAssets() {
             assetType: "image",
             source: "website",
             url: imgUrl,
-            assetMetadata: { scrapedFrom: url },
+            assetMetadata: JSON.stringify({ scrapedFrom: url }),
           },
         });
         saved++;

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { FiltersCard } from "@/components/ui/FiltersCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -21,14 +22,14 @@ export default function AssetsPage() {
   const [loading, setLoading] = useState(false);
   const { showToast } = useToast();
 
-  const loadAssets = () => {
+  const loadAssets = useCallback(() => {
     const params = new URLSearchParams();
     if (filters.source) params.set("source", filters.source);
     if (filters.type) params.set("type", filters.type);
     fetch(`/api/assets?${params}`).then((r) => r.json()).then((d) => d.success && setAssets(d.assets)).catch(() => {});
-  };
+  }, [filters]);
 
-  useEffect(() => { loadAssets(); }, [filters]);
+  useEffect(() => { loadAssets(); }, [loadAssets]);
 
   const scrape = async () => {
     setLoading(true);
@@ -71,7 +72,9 @@ export default function AssetsPage() {
           {assets.map((a) => (
             <div key={a.id} className="rounded-sm overflow-hidden border border-border-light bg-card-bg hover:shadow-card-md transition-shadow">
               {a.assetType === "image" && (
-                <img src={a.url} alt="" className="w-full h-[140px] object-cover" loading="lazy" />
+                <div className="relative w-full h-[140px]">
+                  <Image src={a.url} alt="" fill className="object-cover" sizes="180px" unoptimized />
+                </div>
               )}
               <div className="p-2.5 text-[.78rem] text-text-secondary">
                 <span className="bg-bg px-1.5 py-0.5 rounded text-[.7rem]">{a.source}</span>

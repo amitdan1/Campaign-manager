@@ -45,7 +45,7 @@ export async function getPromptContext(agentName: string, maxMemories = 5): Prom
 
   const lines = ["## Past Experience (from your memory)"];
   for (const m of memories) {
-    const val = m.value as Record<string, unknown>;
+    const val = m.value ? JSON.parse(m.value) : null;
     if (m.memoryType === "feedback") {
       lines.push(`- User feedback on ${m.key}: ${JSON.stringify(val)}`);
     } else if (m.memoryType === "episodic") {
@@ -100,17 +100,14 @@ export async function getPerformanceContext(agentName: string, maxRecords = 5): 
 
   const lines = ["## Campaign Performance Data (learn from these results)"];
 
-  const sorted = [...perfMemories].sort((a, b) => {
-    const aVal = (a.value as Record<string, number>)?.ctr ?? 0;
-    const bVal = (b.value as Record<string, number>)?.ctr ?? 0;
-    return bVal - aVal;
-  });
+  const parsed = perfMemories.map((m) => ({ ...m, parsed: m.value ? JSON.parse(m.value) : {} }));
+  const sorted = parsed.sort((a, b) => (Number(b.parsed.ctr ?? 0)) - (Number(a.parsed.ctr ?? 0)));
 
   const top = sorted.slice(0, 3);
   if (top.length > 0) {
     lines.push("### Top Performing:");
     for (const m of top) {
-      const v = m.value as Record<string, unknown>;
+      const v = m.parsed;
       lines.push(
         `- ${v.campaign ?? "Unknown"} (${v.platform ?? ""}): CTR=${Number(v.ctr ?? 0).toFixed(1)}%, CPL=₪${Number(v.cpl ?? 0).toFixed(0)}`
       );
