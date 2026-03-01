@@ -2,6 +2,7 @@
 config.json
 *.env
 .env
+.env.local
 
 # Database files
 leads.json
@@ -18,6 +19,13 @@ __pycache__/
 venv/
 env/
 ENV/
+
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+.vercel/
+next-env.d.ts
 
 # IDE
 .vscode/
@@ -36,3 +44,11 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.bak
+
+# Browser automation / screenshots (dev tooling)
+screenshots/
+*.mjs
+!next.config.mjs
+
+# Package lock (regenerated on install)
+package-lock.json

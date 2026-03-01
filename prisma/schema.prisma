@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Lead {
+  id             String        @id @default(cuid())
+  name           String
+  phone          String
+  email          String        @default("")
+  source         String        @default("manual")
+  campaign       String        @default("")
+  status         String        @default("new")
+  qualityScore   Int?          @map("quality_score")
+  scoreReasoning String?       @map("score_reasoning")
+  location       String?
+  budget         String?
+  projectType    String?       @map("project_type")
+  notes          String?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  interactions   Interaction[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([status])
+  @@index([source])
+  @@index([createdAt])
+  @@map("leads")
+}
+
+model Campaign {
+  id             Int      @id @default(autoincrement())
+  campaignId     String   @map("campaign_id")
+  campaignName   String   @map("campaign_name")
+  platform       String
+  date           DateTime @default(now())
+  impressions    Int      @default(0)
+  clicks         Int      @default(0)
+  conversions    Int      @default(0)
+  cost           Float    @default(0)
+  cpl            Float    @default(0)
+  ctr            Float    @default(0)
+  conversionRate Float    @default(0) @map("conversion_rate")
+
+  @@index([campaignId])
+  @@index([platform])
+  @@index([date])
+  @@map("campaigns")
+}
+
+model Proposal {
+  id               Int       @id @default(autoincrement())
+  agentName        String    @map("agent_name")
+  proposalType     String    @map("proposal_type")
+  title            String
+  summary          String?
+  content          String?
+  status           String    @default("pending_review")
+  feedback         String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  approvedAt       DateTime? @map("approved_at")
+  executedAt       DateTime? @map("executed_at")
+  parentProposalId Int?      @map("parent_proposal_id")
+
+  @@index([status])
+  @@index([proposalType])
+  @@index([agentName])
+  @@index([createdAt])
+  @@map("proposals")
+}
+
+model BrandAsset {
+  id            Int      @id @default(autoincrement())
+  assetType     String   @map("asset_type")
+  source        String
+  url           String
+  localPath     String?  @map("local_path")
+  thumbnailPath String?  @map("thumbnail_path")
+  assetMetadata String?  @map("asset_metadata")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([source])
+  @@index([assetType])
+  @@map("brand_assets")
+}
+
+model ChatMessage {
+  id         Int      @id @default(autoincrement())
+  role       String
+  agentName  String?  @map("agent_name")
+  content    String
+  proposalId Int?     @map("proposal_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("chat_messages")
+}
+
+model Interaction {
+  id              Int      @id @default(autoincrement())
+  leadId          String   @map("lead_id")
+  channel         String
+  interactionType String   @map("interaction_type")
+  content         String?
+  status          String   @default("sent")
+  createdAt       DateTime @default(now()) @map("created_at")
+  lead            Lead     @relation(fields: [leadId], references: [id])
+
+  @@map("interactions")
+}
+
+model AgentMemory {
+  id         Int      @id @default(autoincrement())
+  agentName  String   @map("agent_name")
+  memoryType String   @map("memory_type")
+  key        String
+  value      String?
+  context    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([agentName])
+  @@index([memoryType])
+  @@index([key])
+  @@map("agent_memories")
+}
+
+model ABTest {
+  id        Int             @id @default(autoincrement())
+  name      String
+  status    String          @default("active")
+  createdAt DateTime        @default(now()) @map("created_at")
+  endedAt   DateTime?       @map("ended_at")
+  variants  ABTestVariant[]
+
+  @@map("ab_tests")
+}
+
+model ABTestVariant {
+  id          Int      @id @default(autoincrement())
+  testId      Int      @map("test_id")
+  proposalId  Int      @map("proposal_id")
+  variantName String   @map("variant_name")
+  weight      Float    @default(0.5)
+  views       Int      @default(0)
+  conversions Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  test        ABTest   @relation(fields: [testId], references: [id])
+
+  @@index([testId])
+  @@map("ab_test_variants")
+}
+
+model TokenUsage {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @default(now())
+  model     String
+  prompt    Int      @default(0)
+  completion Int     @default(0)
+  total     Int      @default(0)
+  endpoint  String?
+
+  @@index([date])
+  @@map("token_usage")
+}
